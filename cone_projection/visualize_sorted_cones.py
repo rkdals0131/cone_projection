@@ -32,9 +32,16 @@ class ConeVisualizer(Node):
         num_coords = msg.layout.dim[1].size
         offset = msg.layout.data_offset
 
+        #self.get_logger().info(f"Received message: {msg}")
+        #self.get_logger().info(f"num_cones: {num_cones}, num_coords: {num_coords}, offset: {offset}")
+
         try:
             data = np.array(msg.data[offset:])
+            #self.get_logger().info(f"Raw data: {data}")
+
             cones = data.reshape((num_cones, num_coords))
+            #self.get_logger().info(f"Reshaped data: {cones}")
+
         except Exception as e:
             self.get_logger().error(f"Data reshape error: {e}")
             return
@@ -95,6 +102,8 @@ class ConeVisualizer(Node):
         for cone in cones:
             x, y = cone
             u, v = world_to_image(x, y)
+            #self.get_logger().info(f"Cone at world: ({x}, {y}), image: ({u}, {v}))")
+
             cv2.circle(img, (u, v), 5, (0, 255, 0), -1)
             text = f"({x:.2f}, {y:.2f})"
             cv2.putText(img, text, (u + 5, v - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 1, cv2.LINE_AA)

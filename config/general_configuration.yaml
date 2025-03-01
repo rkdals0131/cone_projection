@@ -2,6 +2,10 @@ lidar:
   lidar_topic: /sorted_cones
   frame_id: os_sensor
 
+cones:
+  sorted_cones_topic: /sorted_cones
+  frame_id: os_sensor
+
 camera:
   image_topic: /image_raw
   projected_topic: /cones_projected_image
