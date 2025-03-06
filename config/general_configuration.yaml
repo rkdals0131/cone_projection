@@ -1,9 +1,9 @@
 lidar:
-  lidar_topic: /sorted_cones
+  lidar_topic: /sorted_cones_time
   frame_id: os_sensor
 
 cones:
-  sorted_cones_topic: /sorted_cones
+  sorted_cones_topic: /sorted_cones_time
   frame_id: os_sensor
 
 camera:

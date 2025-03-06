@@ -44,7 +44,7 @@ def load_camera_calibration(yaml_path: str) -> (np.ndarray, np.ndarray):
     return camera_matrix, dist_coeffs
 
 # sorted_cones 메시지 파싱 함수
-def parse_sorted_cones(msg: Float32MultiArray) -> np.ndarray:
+def parse_sorted_cones(msg: ModifiedFloat32MultiArray) -> np.ndarray:
     data = np.array(msg.data, dtype=np.float64)
     if data.size % 2 != 0:
         raise ValueError("Sorted cones data size is not even.")
@@ -80,15 +80,15 @@ class SortedConesProjectionNode(Node):
         self.get_logger().info(f"Subscribing to image topic: {image_topic}")
         self.get_logger().info(f"Subscribing to sorted cones topic: {sorted_cones_topic}")
         
-        self.image_sub = Subscriber(self, Image, "/image_raw")
-        self.cones_sub = Subscriber(self, Float32MultiArray, "/sorted_cones")
+        self.image_sub = Subscriber(self, Image, image_topic)
+        self.cones_sub = Subscriber(self, ModifiedFloat32MultiArray, sorted_cones_topic)
         
         # ApproximateTimeSynchronizer로 두 토픽 동기화
         self.ts = ApproximateTimeSynchronizer(
             [self.image_sub, self.cones_sub],
             queue_size=5,
             slop=0.1,
-            allow_headerless=True,
+            allow_headerless=False,
         )
         self.ts.registerCallback(self.sync_callback)
         
@@ -113,21 +113,20 @@ class SortedConesProjectionNode(Node):
             self.last_log_time = current_time
 
     # 동기화된 이미지와 cones 데이터 처리
-    def sync_callback(self, image_msg: Image, cones_msg: Float32MultiArray):
-        # 디버깅 카운터 증가
+    def sync_callback(self, image_msg: Image, cones_msg: ModifiedFloat32MultiArray):
         self.image_count += 1
         self.cones_count += 1
         
         self.get_logger().info("Received synchronized image and cones data.")
         
-        # 이미지 메시지를 OpenCV 형식으로 변환
+        # 이미지 변환
         try:
             cv_image = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='bgr8')
         except Exception as e:
             self.get_logger().error(f"Failed to convert image message: {e}")
             return
         
-        # sorted_cones 메시지에서 마커 좌표 파싱
+        # 콘 데이터 파싱
         try:
             markers = parse_sorted_cones(cones_msg)
         except Exception as e:
@@ -140,37 +139,55 @@ class SortedConesProjectionNode(Node):
             out_msg = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')
             out_msg.header = image_msg.header
             self.pub_image.publish(out_msg)
-            self.get_logger().info("Published image without markers.")
             return
         
-        # 마커 좌표를 동차 좌표로 변환 ([x, y, 0, 1])
+        # 동차 좌표 변환 및 투사 좌표 계산
         markers_h = np.hstack((markers, np.zeros((n_markers, 1), dtype=np.float64), 
-                               np.ones((n_markers, 1), dtype=np.float64)))
-        
-        # LiDAR 좌표계를 카메라 좌표계로 변환
+                            np.ones((n_markers, 1), dtype=np.float64)))
         markers_cam_h = markers_h @ self.T_lidar_to_cam.T
-        markers_cam = markers_cam_h[:, :3]
+        markers_cam = markers_cam_h[:, :3].reshape(-1, 1, 3)
         
-        # 3D 마커를 2D 이미지 좌표로 투영
         rvec = np.zeros((3, 1), dtype=np.float64)
         tvec = np.zeros((3, 1), dtype=np.float64)
         image_points, _ = cv2.projectPoints(markers_cam, rvec, tvec,
                                             self.camera_matrix, self.dist_coeffs)
         image_points = image_points.reshape(-1, 2)
         
-        # 투영된 좌표를 이미지에 시각화 (빨간 원)
-        h, w = cv_image.shape[:2]
-        for (u, v) in image_points:
-            u_int = int(round(u))
-            v_int = int(round(v))
-            if 0 <= u_int < w and 0 <= v_int < h:
-                cv2.circle(cv_image, (u_int, v_int), 4, (0, 0, 255), -1)
+        # 시각화 함수 호출
+        self.visualize_points(cv_image, image_points)
         
-        # 결과 이미지를 ROS 메시지로 변환 및 퍼블리시
+        # 퍼블리시
         out_msg = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')
         out_msg.header = image_msg.header
         self.pub_image.publish(out_msg)
         self.get_logger().info(f"Published projected image with {n_markers} markers.")
+
+    def visualize_points(self, cv_image: np.ndarray, image_points: np.ndarray):
+        """
+        이미지에 투사된 좌표를 시각화하는 함수
+        :param cv_image: OpenCV 이미지 (BGR 형식)
+        :param image_points: 투사된 픽셀 좌표 배열 (N, 2)
+        """
+        h, w = cv_image.shape[:2]
+        self.get_logger().info(f"Image size: {h}x{w}")
+        self.get_logger().info(f"Visualizing {len(image_points)} points.")
+        self.get_logger().info(f"Image points: {image_points}")
+
+        for i, (u, v) in enumerate(image_points):
+            u_int = int(round(u))
+            v_int = int(round(v))
+            self.get_logger().info(f"Received Point {i}: ({u_int}, {v_int})")
+            if 0 <= u_int < w and 0 <= v_int < h:
+                # 원 그리기 (빨간색, 반지름 4)
+                cv2.circle(cv_image, (u_int, v_int), 20, (0, 0, 255), -1)
+                
+                # 인덱스 라벨 추가 (초록색, 크기 0.5)
+                label = f"ID:{i}"
+                cv2.putText(cv_image, label, (u_int + 5, v_int - 5),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+                
+                # 로그 출력 (디버깅용)
+                self.get_logger().debug(f"Projected Point {i}: ({u_int}, {v_int})")
 
 def main(args=None):
     rclpy.init(args=args)
