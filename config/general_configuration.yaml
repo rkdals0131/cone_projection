@@ -1,21 +1,21 @@
 lidar:
-  lidar_topic: /sorted_cones_time
+  lidar_topic: /point_cones
   frame_id: os_sensor
 
 cones:
   sorted_cones_topic: /sorted_cones_time
-  frame_id: os_sensor
+  frame_id: os_lidar
 
 camera:
   image_topic: /image_raw
   projected_topic: /cones_projected_image
   image_size:
     width: 640
-    height: 480
+    height: 360
   frame_id: camera
 
 general:
-  config_folder: /home/user1/fusion_ws/src/cone_projection/config
+  config_folder: /home/user1/ros2_ws/src/cone_projection/config
   camera_intrinsic_calibration: camera_intrinsic_calibration.yaml
   camera_extrinsic_calibration: camera_extrinsic_calibration.yaml
   slop: 0.1 

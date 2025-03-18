@@ -32,7 +32,7 @@ def load_extrinsic_matrix(yaml_path: str) -> np.ndarray:
     return T
 
 # 카메라 캘리브레이션 데이터 로드 함수
-def load_camera_calibration(yaml_path: str) -> (np.ndarray, np.ndarray):
+def load_camera_calibration(yaml_path: str) -> tuple[np.ndarray, np.ndarray]:
     if not os.path.isfile(yaml_path):
         raise FileNotFoundError(f"No camera calibration file: {yaml_path}")
     with open(yaml_path, 'r') as f:
