@@ -75,7 +75,7 @@ class ConeVisualizer(Node):
         def world_to_image(x, y):
             # x: 전방, y: 좌우 (양의 방향이 왼쪽)
             u = int(self.origin[0] + y * self.scale)  # y positive → 왼쪽
-            v = int(self.origin[1] - x * self.scale)  # x positive → 위쪽 (전방)
+            v = int(self.origin[1] + x * self.scale)  # x positive → 위쪽 (전방)
             return (u, v)
 
         # 1m 간격의 horizontal grid line (x 고정) 그리기
